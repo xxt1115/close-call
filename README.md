@@ -1,7 +1,7 @@
 # 擦身而过 · Close Call
 
 > 一款由 HTML + CSS + JavaScript 编写的轻量级躲避类小游戏。  
-> 控制你的方块角色，在越来越密集的飞行物中生存下去，挑战你的反应极限！
+> 控制你的方块角色，在越来越密集的飞行物中生存下去，挑战你的反应极限！   
 > 在线游玩：cloescall.xiaoxiaotong.dpdns.org
 
 ---
