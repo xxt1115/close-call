@@ -19,6 +19,4 @@
 
 ## 🖼️ 游戏截图
 
-![游戏开始界面](./screenshots/start.png)
-![游戏进行中](./screenshots/ingame.png)
-![游戏结束画面](./screenshots/gameover.png)
+![游戏界面](./screenshots/test.PNG)
