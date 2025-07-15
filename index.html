@@ -29,6 +29,10 @@
             position: relative;
             margin: 15px 0;
             max-width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
         
         .game-header {
@@ -190,13 +194,12 @@
             color: #a9b8d8;
         }
 
-        /* 虚拟摇杆样式 */
-        .virtual-joystick {
-            position: absolute;
-            bottom: 40px;
-            left: 40px;
-            display: none;
-            z-index: 5;
+        /* 虚拟摇杆样式 - 修正重叠问题 */
+        .virtual-joystick-container {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            padding: 20px 0;
         }
         
         .joystick-base {
@@ -209,6 +212,7 @@
             align-items: center;
             justify-content: center;
             position: relative;
+            touch-action: none;
         }
         
         .joystick-head {
@@ -221,11 +225,24 @@
             box-shadow: 0 0 15px rgba(76, 201, 240, 0.7);
             transition: transform 0.1s;
             pointer-events: none;
+            top: 50%;
+            left: 50%;
         }
         
         @media (max-width: 768px) {
-            .virtual-joystick {
-                display: block;
+            .game-container {
+                height: 100%;
+                max-height: calc(100vh - 200px);
+            }
+            
+            canvas {
+                max-height: calc(100vh - 300px);
+            }
+            
+            .virtual-joystick-container {
+                position: static;
+                padding: 20px 0;
+                z-index: 5;
             }
             
             .instructions p {
@@ -248,10 +265,6 @@
                 font-size: 2rem;
             }
             
-            canvas {
-                width: 100%;
-            }
-            
             .joystick-base {
                 width: 80px;
                 height: 80px;
@@ -264,9 +277,12 @@
         }
         
         @media (max-height: 700px) {
-            .virtual-joystick {
-                bottom: 20px;
-                left: 20px;
+            .virtual-joystick-container {
+                padding: 10px 0;
+            }
+            
+            canvas {
+                max-height: calc(100vh - 250px);
             }
         }
     </style>
@@ -293,17 +309,18 @@
     <div class="game-container">
         <canvas id="gameCanvas" width="800" height="500"></canvas>
         
-        <div class="virtual-joystick">
-            <div class="joystick-base">
-                <div class="joystick-head"></div>
-            </div>
-        </div>
-        
         <div id="gameOver" class="game-over">
             <h2>游戏结束!</h2>
             <p>你的分数: <span id="finalScore">0</span></p>
             <p>坚持时间: <span id="finalTime">0</span>秒</p>
             <button id="restartBtn" class="btn">重新开始</button>
+        </div>
+    </div>
+    
+    <!-- 摇杆放在游戏容器下方 -->
+    <div class="virtual-joystick-container">
+        <div class="joystick-base">
+            <div class="joystick-head"></div>
         </div>
     </div>
     
@@ -414,7 +431,7 @@
             
             // 绘制发光效果
             ctx.shadowColor = player.color;
-            ctx.shadowBlur = 15;
+            ctx.shhadowBlur = 15;
             ctx.fillStyle = player.color;
             ctx.fillRect(player.x, player.y, player.width, player.height);
             ctx.shadowBlur = 0;
@@ -595,7 +612,7 @@
         
         // 创建碰撞粒子效果
         function createImpactParticles(enemy) {
-            for (let i = 0; i < 20; i++) {
+            for (let i = 0; i > 20; i++) {
                 gameState.particles.push({
                     x: enemy.x,
                     y: enemy.y,
@@ -871,13 +888,13 @@
         
         // 初始化游戏
         initPreviews();
-        setupJoystick(); // 添加摇杆事件
+        setupJoystick();
         gameLoop();
         
-        // 处理窗口大小变化
+        // 窗口大小变化重新设置摇杆位置
         window.addEventListener('resize', () => {
             const gameContainer = document.querySelector('.game-container');
-            const aspectRatio = 800/500; // 原始宽高比
+            const aspectRatio = 800/500;
             let newWidth = gameContainer.clientWidth;
             let newHeight = newWidth / aspectRatio;
             
