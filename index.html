@@ -2,13 +2,14 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>擦身而过</title>
     <style>
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
+            touch-action: none;
         }
         
         body {
@@ -188,8 +189,53 @@
             line-height: 1.6;
             color: #a9b8d8;
         }
+
+        /* 虚拟摇杆样式 */
+        .virtual-joystick {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            display: none;
+            z-index: 5;
+        }
         
-        @media (max-width: 600px) {
+        .joystick-base {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: rgba(76, 201, 240, 0.25);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .joystick-head {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.9);
+            position: absolute;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px rgba(76, 201, 240, 0.7);
+            transition: transform 0.1s;
+            pointer-events: none;
+        }
+        
+        @media (max-width: 768px) {
+            .virtual-joystick {
+                display: block;
+            }
+            
+            .instructions p {
+                font-size: 0.9rem;
+            }
+            
+            .controls {
+                display: none;
+            }
+            
             .game-header {
                 flex-direction: column;
             }
@@ -200,6 +246,27 @@
             
             h1 {
                 font-size: 2rem;
+            }
+            
+            canvas {
+                width: 100%;
+            }
+            
+            .joystick-base {
+                width: 80px;
+                height: 80px;
+            }
+            
+            .joystick-head {
+                width: 40px;
+                height: 40px;
+            }
+        }
+        
+        @media (max-height: 700px) {
+            .virtual-joystick {
+                bottom: 20px;
+                left: 20px;
             }
         }
     </style>
@@ -225,6 +292,12 @@
     
     <div class="game-container">
         <canvas id="gameCanvas" width="800" height="500"></canvas>
+        
+        <div class="virtual-joystick">
+            <div class="joystick-base">
+                <div class="joystick-head"></div>
+            </div>
+        </div>
         
         <div id="gameOver" class="game-over">
             <h2>游戏结束!</h2>
@@ -289,8 +362,13 @@
             enemySpawnInterval: 1500, // 初始生成间隔(毫秒)
             minSpawnInterval: 400,   // 最小生成间隔
             keys: {},
-            particles: []
+            particles: [],
+            isTouchActive: false
         };
+        
+        // 摇杆元素
+        const joystickBase = document.querySelector('.joystick-base');
+        const joystickHead = document.querySelector('.joystick-head');
         
         // 初始化预览图形
         function initPreviews() {
@@ -596,6 +674,7 @@
         function updatePlayer() {
             const player = gameState.player;
             
+            // 处理键盘控制
             if (gameState.keys['ArrowUp'] || gameState.keys['w'] || gameState.keys['W']) {
                 player.y -= player.speed;
             }
@@ -609,6 +688,12 @@
                 player.x += player.speed;
             }
             
+            // 处理摇杆控制（优先于键盘）
+            if (gameState.isTouchActive) {
+                player.x += gameState.touchX * player.speed;
+                player.y += gameState.touchY * player.speed;
+            }
+            
             // 边界检查
             if (player.x < 0) player.x = 0;
             if (player.y < 0) player.y = 0;
@@ -619,42 +704,24 @@
         // 更新游戏状态
         function updateGame() {
             if (gameState.gameOver) return;
-
-            // === 可调节参数 ===
-            const timePerFrame = 0.016;             // 每帧时间（约60FPS）
-            const baseSpeed = 1.0;                  // 游戏初始速度
-            const speedIncreaseInterval = 60;       // 每隔 N 秒速度增加1倍（原为30）
-            const maxSpeedMultiplier = 3;           // 最多额外加速倍数（总速度最多 baseSpeed + max）
-            const spawnBaseInterval = 1500;         // 初始敌人生成间隔（毫秒）
-            const spawnDecreasePerSecond = 10;      // 每秒减少的生成间隔（原为20）
-
-            // === 更新时间 ===
+            
+            const timePerFrame = 0.016;
             gameState.gameTime += timePerFrame;
-
-            // === 更新游戏速度（随时间增长）===
-            // 游戏速度 = baseSpeed + gameTime / speedIncreaseInterval（最多额外提升maxSpeedMultiplier）
-            gameState.gameSpeed = baseSpeed + Math.min(gameState.gameTime / speedIncreaseInterval, maxSpeedMultiplier);
-
-            // === 更新敌人生成间隔（随时间减少）===
-            // 每秒减少一定毫秒，生成频率加快，最低不小于 minSpawnInterval
-            gameState.enemySpawnInterval = Math.max(
-                gameState.minSpawnInterval,
-                spawnBaseInterval - (gameState.gameTime * spawnDecreasePerSecond)
-            );
-
-            // === 更新 UI 显示 ===
-            document.getElementById('time').textContent = Math.floor(gameState.gameTime); // 显示游戏时间（取整秒）
-            document.getElementById('speed').textContent = gameState.gameSpeed.toFixed(1) + 'x'; // 显示速度倍率
-            document.getElementById('difficultyProgress').style.width = 
-                Math.min(100, gameState.gameTime / speedIncreaseInterval * 100) + '%'; // 难度条进度
-
-            // === 核心游戏流程 ===
-            spawnEnemy();       // 生成敌人（依据 enemySpawnInterval 控制）
-            updatePlayer();     // 更新玩家位置（响应键盘输入）
-            updateEnemies();    // 更新所有敌人移动、检测碰撞
-            updateParticles();  // 更新粒子效果（如爆炸、轨迹等）
+            
+            // 随时间增加游戏难度
+            const timeFactor = gameState.gameTime / 30;
+            gameState.gameSpeed = 1.0 + Math.min(timeFactor, 2);
+            gameState.enemySpawnInterval = Math.max(gameState.minSpawnInterval, 1500 - gameState.gameTime * 10);
+            
+            document.getElementById('time').textContent = Math.floor(gameState.gameTime);
+            document.getElementById('speed').textContent = gameState.gameSpeed.toFixed(1) + 'x';
+            document.getElementById('difficultyProgress').style.width = Math.min(100, timeFactor * 50) + '%';
+            
+            spawnEnemy();
+            updatePlayer();
+            updateEnemies();
+            updateParticles();
         }
-
         
         // 绘制游戏
         function drawGame() {
@@ -721,12 +788,16 @@
             gameState.gameOver = false;
             gameState.enemySpawnInterval = 1500;
             gameState.particles = [];
+            gameState.isTouchActive = false;
             
             document.getElementById('score').textContent = '0';
             document.getElementById('time').textContent = '0';
             document.getElementById('speed').textContent = '1.0x';
             document.getElementById('difficultyProgress').style.width = '0%';
             document.getElementById('gameOver').style.display = 'none';
+            
+            // 重置摇杆位置
+            joystickHead.style.transform = 'translate(-50%, -50%)';
         }
         
         // 键盘事件监听
@@ -741,6 +812,56 @@
         // 重新开始按钮
         document.getElementById('restartBtn').addEventListener('click', restartGame);
         
+        // 摇杆控制逻辑
+        function setupJoystick() {
+            let joystickRect = joystickBase.getBoundingClientRect();
+            const centerX = joystickRect.left + joystickRect.width/2;
+            const centerY = joystickRect.top + joystickRect.height/2;
+            const maxDist = joystickRect.width/2 - joystickHead.offsetWidth/2;
+            
+            // 开始触摸
+            joystickBase.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                gameState.isTouchActive = true;
+                updateJoystickPosition(e.touches[0].clientX, e.touches[0].clientY, centerX, centerY, maxDist);
+            });
+            
+            // 触摸移动
+            document.addEventListener('touchmove', (e) => {
+                if (gameState.isTouchActive) {
+                    e.preventDefault();
+                    updateJoystickPosition(e.touches[0].clientX, e.touches[0].clientY, centerX, centerY, maxDist);
+                }
+            }, { passive: false });
+            
+            // 结束触摸
+            document.addEventListener('touchend', (e) => {
+                if (gameState.isTouchActive) {
+                    gameState.isTouchActive = false;
+                    gameState.touchX = 0;
+                    gameState.touchY = 0;
+                    joystickHead.style.transform = 'translate(-50%, -50%)';
+                }
+            });
+        }
+        
+        // 更新摇杆位置
+        function updateJoystickPosition(clientX, clientY, centerX, centerY, maxDist) {
+            const diffX = clientX - centerX;
+            const diffY = clientY - centerY;
+            const dist = Math.min(Math.sqrt(diffX * diffX + diffY * diffY), maxDist);
+            const angle = Math.atan2(diffY, diffX);
+            
+            const moveX = Math.cos(angle) * dist;
+            const moveY = Math.sin(angle) * dist;
+            
+            joystickHead.style.transform = `translate(${moveX}px, ${moveY}px)`;
+            
+            // 计算摇杆方向向量
+            gameState.touchX = Math.cos(angle) * (dist / maxDist);
+            gameState.touchY = Math.sin(angle) * (dist / maxDist);
+        }
+        
         // 游戏循环
         function gameLoop() {
             updateGame();
@@ -750,7 +871,29 @@
         
         // 初始化游戏
         initPreviews();
+        setupJoystick(); // 添加摇杆事件
         gameLoop();
+        
+        // 处理窗口大小变化
+        window.addEventListener('resize', () => {
+            const gameContainer = document.querySelector('.game-container');
+            const aspectRatio = 800/500; // 原始宽高比
+            let newWidth = gameContainer.clientWidth;
+            let newHeight = newWidth / aspectRatio;
+            
+            // 如果高度超出容器，则调整宽度
+            if (newHeight > window.innerHeight - 200) {
+                newHeight = window.innerHeight - 200;
+                newWidth = newHeight * aspectRatio;
+            }
+            
+            canvas.width = newWidth;
+            canvas.height = newHeight;
+            
+            // 重置玩家位置
+            gameState.player.x = canvas.width / 2 - 15;
+            gameState.player.y = canvas.height / 2 - 15;
+        });
     </script>
 </body>
 </html>
